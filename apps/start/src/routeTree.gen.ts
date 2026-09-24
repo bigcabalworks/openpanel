@@ -50,6 +50,7 @@ import { Route as AppOrganizationIdProjectIdRealtimeRouteImport } from './routes
 import { Route as AppOrganizationIdProjectIdPagesRouteImport } from './routes/_app.$organizationId.$projectId.pages'
 import { Route as AppOrganizationIdProjectIdInsightsRouteImport } from './routes/_app.$organizationId.$projectId.insights'
 import { Route as AppOrganizationIdProjectIdGroupsRouteImport } from './routes/_app.$organizationId.$projectId.groups'
+import { Route as AppOrganizationIdProjectIdExperimentsRouteImport } from './routes/_app.$organizationId.$projectId.experiments'
 import { Route as AppOrganizationIdProjectIdDashboardsRouteImport } from './routes/_app.$organizationId.$projectId.dashboards'
 import { Route as AppOrganizationIdProjectIdCohortsRouteImport } from './routes/_app.$organizationId.$projectId.cohorts'
 import { Route as AppOrganizationIdMembersTabsIndexRouteImport } from './routes/_app.$organizationId.members._tabs.index'
@@ -378,6 +379,12 @@ const AppOrganizationIdProjectIdGroupsRoute =
   AppOrganizationIdProjectIdGroupsRouteImport.update({
     id: '/groups',
     path: '/groups',
+    getParentRoute: () => AppOrganizationIdProjectIdRoute,
+  } as any)
+const AppOrganizationIdProjectIdExperimentsRoute =
+  AppOrganizationIdProjectIdExperimentsRouteImport.update({
+    id: '/experiments',
+    path: '/experiments',
     getParentRoute: () => AppOrganizationIdProjectIdRoute,
   } as any)
 const AppOrganizationIdProjectIdDashboardsRoute =
@@ -722,6 +729,7 @@ export interface FileRoutesByFullPath {
   '/$organizationId/': typeof AppOrganizationIdIndexRoute
   '/$organizationId/$projectId/cohorts': typeof AppOrganizationIdProjectIdCohortsRoute
   '/$organizationId/$projectId/dashboards': typeof AppOrganizationIdProjectIdDashboardsRoute
+  '/$organizationId/$projectId/experiments': typeof AppOrganizationIdProjectIdExperimentsRoute
   '/$organizationId/$projectId/groups': typeof AppOrganizationIdProjectIdGroupsRoute
   '/$organizationId/$projectId/insights': typeof AppOrganizationIdProjectIdInsightsRoute
   '/$organizationId/$projectId/pages': typeof AppOrganizationIdProjectIdPagesRoute
@@ -808,6 +816,7 @@ export interface FileRoutesByTo {
   '/$organizationId': typeof AppOrganizationIdIndexRoute
   '/$organizationId/$projectId/cohorts': typeof AppOrganizationIdProjectIdCohortsRoute
   '/$organizationId/$projectId/dashboards': typeof AppOrganizationIdProjectIdDashboardsRoute
+  '/$organizationId/$projectId/experiments': typeof AppOrganizationIdProjectIdExperimentsRoute
   '/$organizationId/$projectId/groups': typeof AppOrganizationIdProjectIdGroupsRoute
   '/$organizationId/$projectId/insights': typeof AppOrganizationIdProjectIdInsightsRoute
   '/$organizationId/$projectId/pages': typeof AppOrganizationIdProjectIdPagesRoute
@@ -891,6 +900,7 @@ export interface FileRoutesById {
   '/_app/$organizationId/': typeof AppOrganizationIdIndexRoute
   '/_app/$organizationId/$projectId/cohorts': typeof AppOrganizationIdProjectIdCohortsRoute
   '/_app/$organizationId/$projectId/dashboards': typeof AppOrganizationIdProjectIdDashboardsRoute
+  '/_app/$organizationId/$projectId/experiments': typeof AppOrganizationIdProjectIdExperimentsRoute
   '/_app/$organizationId/$projectId/groups': typeof AppOrganizationIdProjectIdGroupsRoute
   '/_app/$organizationId/$projectId/insights': typeof AppOrganizationIdProjectIdInsightsRoute
   '/_app/$organizationId/$projectId/pages': typeof AppOrganizationIdProjectIdPagesRoute
@@ -991,6 +1001,7 @@ export interface FileRouteTypes {
     | '/$organizationId/'
     | '/$organizationId/$projectId/cohorts'
     | '/$organizationId/$projectId/dashboards'
+    | '/$organizationId/$projectId/experiments'
     | '/$organizationId/$projectId/groups'
     | '/$organizationId/$projectId/insights'
     | '/$organizationId/$projectId/pages'
@@ -1077,6 +1088,7 @@ export interface FileRouteTypes {
     | '/$organizationId'
     | '/$organizationId/$projectId/cohorts'
     | '/$organizationId/$projectId/dashboards'
+    | '/$organizationId/$projectId/experiments'
     | '/$organizationId/$projectId/groups'
     | '/$organizationId/$projectId/insights'
     | '/$organizationId/$projectId/pages'
@@ -1159,6 +1171,7 @@ export interface FileRouteTypes {
     | '/_app/$organizationId/'
     | '/_app/$organizationId/$projectId/cohorts'
     | '/_app/$organizationId/$projectId/dashboards'
+    | '/_app/$organizationId/$projectId/experiments'
     | '/_app/$organizationId/$projectId/groups'
     | '/_app/$organizationId/$projectId/insights'
     | '/_app/$organizationId/$projectId/pages'
@@ -1573,6 +1586,13 @@ declare module '@tanstack/react-router' {
       path: '/groups'
       fullPath: '/$organizationId/$projectId/groups'
       preLoaderRoute: typeof AppOrganizationIdProjectIdGroupsRouteImport
+      parentRoute: typeof AppOrganizationIdProjectIdRoute
+    }
+    '/_app/$organizationId/$projectId/experiments': {
+      id: '/_app/$organizationId/$projectId/experiments'
+      path: '/experiments'
+      fullPath: '/$organizationId/$projectId/experiments'
+      preLoaderRoute: typeof AppOrganizationIdProjectIdExperimentsRouteImport
       parentRoute: typeof AppOrganizationIdProjectIdRoute
     }
     '/_app/$organizationId/$projectId/dashboards': {
@@ -2274,6 +2294,7 @@ const AppOrganizationIdProjectIdGroupsGroupIdRouteWithChildren =
 interface AppOrganizationIdProjectIdRouteChildren {
   AppOrganizationIdProjectIdCohortsRoute: typeof AppOrganizationIdProjectIdCohortsRoute
   AppOrganizationIdProjectIdDashboardsRoute: typeof AppOrganizationIdProjectIdDashboardsRoute
+  AppOrganizationIdProjectIdExperimentsRoute: typeof AppOrganizationIdProjectIdExperimentsRoute
   AppOrganizationIdProjectIdGroupsRoute: typeof AppOrganizationIdProjectIdGroupsRoute
   AppOrganizationIdProjectIdInsightsRoute: typeof AppOrganizationIdProjectIdInsightsRoute
   AppOrganizationIdProjectIdPagesRoute: typeof AppOrganizationIdProjectIdPagesRoute
@@ -2301,6 +2322,8 @@ const AppOrganizationIdProjectIdRouteChildren: AppOrganizationIdProjectIdRouteCh
       AppOrganizationIdProjectIdCohortsRoute,
     AppOrganizationIdProjectIdDashboardsRoute:
       AppOrganizationIdProjectIdDashboardsRoute,
+    AppOrganizationIdProjectIdExperimentsRoute:
+      AppOrganizationIdProjectIdExperimentsRoute,
     AppOrganizationIdProjectIdGroupsRoute:
       AppOrganizationIdProjectIdGroupsRoute,
     AppOrganizationIdProjectIdInsightsRoute:

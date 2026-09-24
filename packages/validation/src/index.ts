@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   chartSegments,
   chartTypes,
@@ -10,6 +8,148 @@ import {
   operators,
   timeWindows,
 } from '@openpanel/constants';
+import { z } from 'zod';
+
+const experimentKey = z
+  .string()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9][a-z0-9_-]*$/);
+const experimentSelector = z
+  .string()
+  .min(1)
+  .max(160)
+  .refine(
+    (selector) =>
+      !(
+        /[>{}+~[\]:*]/.test(selector) ||
+        /(^|\s)(html|body|head)(\s|$|\.)/i.test(selector)
+      ),
+    'Selector can escape its registered experiment slot'
+  );
+
+export const zExperimentVariant = z.object({
+  key: experimentKey,
+  weight: z.number().positive().max(100),
+});
+
+export const zExperimentTargetingRule = z.object({
+  field: z
+    .string()
+    .regex(
+      /^(site|environment|path|content_type|device|country|referrer|utm_source|utm_medium|utm_campaign|authenticated|subscriber_segment|custom_[a-z0-9_-]+)$/
+    ),
+  operator: z.enum([
+    'equals',
+    'not_equals',
+    'contains',
+    'starts_with',
+    'in',
+    'not_in',
+  ]),
+  value: z.union([
+    z.string().max(300),
+    z.array(z.string().max(300)).min(1).max(30),
+    z.boolean(),
+  ]),
+});
+
+export const zExperimentPatch = z.discriminatedUnion('type', [
+  z.object({
+    variant: experimentKey,
+    selector: experimentSelector,
+    type: z.literal('text'),
+    value: z.string().max(500),
+  }),
+  z.object({
+    variant: experimentKey,
+    selector: experimentSelector,
+    type: z.literal('style'),
+    token: experimentKey,
+    value: z
+      .string()
+      .max(120)
+      .regex(/^[a-zA-Z0-9 #.,()%+-]+$/),
+  }),
+]);
+
+const zExperimentCreateObject = z.object({
+  key: experimentKey,
+  name: z.string().min(1).max(160),
+  slot: experimentKey,
+  owner: z.string().min(1).max(160),
+  sites: z.array(experimentKey).min(1).max(20),
+  environments: z
+    .array(
+      z.enum([
+        'local',
+        'development',
+        'dev',
+        'uat',
+        'staging',
+        'production',
+        'prod',
+      ])
+    )
+    .min(1)
+    .max(7),
+  startsAt: z.coerce.date().nullable().optional(),
+  stopsAt: z.coerce.date().nullable().optional(),
+  allocation: z.number().min(0).max(1).default(1),
+  variants: z.array(zExperimentVariant).min(2).max(10),
+  targeting: z.array(zExperimentTargetingRule).max(30).default([]),
+  patches: z.array(zExperimentPatch).max(30).default([]),
+  primaryEvent: experimentKey,
+  secondaryEvents: z.array(experimentKey).max(20).default([]),
+  guardrailEvents: z.array(experimentKey).max(20).default([]),
+  exclusionGroup: experimentKey.nullable().optional(),
+  assignmentSalt: z.string().min(16).max(160),
+});
+
+export const zExperimentCreate = zExperimentCreateObject.superRefine(
+  (value, ctx) => {
+    if (value.startsAt && value.stopsAt && value.stopsAt <= value.startsAt) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stopsAt'],
+        message: 'Stop time must be after start time',
+      });
+    }
+    const variants = new Set(value.variants.map((variant) => variant.key));
+    if (variants.size !== value.variants.length || !variants.has('control')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['variants'],
+        message: 'Variant keys must be unique and include control',
+      });
+    }
+    for (const patch of value.patches) {
+      if (!variants.has(patch.variant)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['patches'],
+          message: `Unknown patch variant: ${patch.variant}`,
+        });
+      }
+    }
+  }
+);
+
+export const zExperimentUpdate = zExperimentCreateObject
+  .omit({ key: true })
+  .partial();
+export const zExperimentUiCreate = zExperimentCreateObject.omit({
+  assignmentSalt: true,
+  owner: true,
+});
+
+export const zExperimentPlacement = z.object({
+  site: experimentKey,
+  environment: experimentKey,
+  slot: experimentKey,
+  variants: z.array(experimentKey).min(2).max(10),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
 
 /**
  * Chart formulas are plain arithmetic over series references (A, B, C, ...).
@@ -20,7 +160,7 @@ import {
 const CHART_FORMULA_PATTERN = /^[A-Za-z0-9_ .,+\-*/()%^]*$/;
 
 export function objectToZodEnums<K extends string>(
-  obj: Record<K, any>,
+  obj: Record<K, any>
 ): [K, ...K[]] {
   const [firstKey, ...otherKeys] = Object.keys(obj) as K[];
   return [firstKey!, ...otherKeys];
@@ -42,21 +182,21 @@ export const zChartEventFilter = z.object({
     .optional()
     .describe(
       'Cast type for the column/value in equality & comparison operators ' +
-        '(string/number/date/datetime/boolean). Absent = legacy behavior.',
+        '(string/number/date/datetime/boolean). Absent = legacy behavior.'
     ),
   cohortId: z
     .string()
     .optional()
     .describe(
       'DEPRECATED: legacy single-cohort id, kept for saved reports. ' +
-        'New code reads cohortIds via getCohortIds(filter).',
+        'New code reads cohortIds via getCohortIds(filter).'
     ),
   cohortIds: z
     .array(z.string())
     .optional()
     .describe(
       'Cohort IDs for inCohort/notInCohort. Multiple ids OR-match ' +
-        '(matches profiles in any of the listed cohorts).',
+        '(matches profiles in any of the listed cohorts).'
     ),
 });
 
@@ -100,7 +240,7 @@ export const zChartEvent = z.object({
     .string()
     .optional()
     .describe(
-      'Optional property of the event used for specific segment calculations (e.g., value for property_sum/average)',
+      'Optional property of the event used for specific segment calculations (e.g., value for property_sum/average)'
     ),
   segment: zChartEventSegment,
   filters: z
@@ -120,7 +260,7 @@ export const zChartFormula = z.object({
     .max(1000)
     .regex(
       CHART_FORMULA_PATTERN,
-      'Formula may only contain series references, numbers and arithmetic operators',
+      'Formula may only contain series references, numbers and arithmetic operators'
     )
     .describe('The formula expression (e.g., A+B, A/B)'),
   displayName: z
@@ -131,7 +271,7 @@ export const zChartFormula = z.object({
     .array(z.string())
     .optional()
     .describe(
-      'Alpha IDs (e.g. ["A", "B"]) of series referenced by this formula that should be hidden from the chart while still being used in the formula computation',
+      'Alpha IDs (e.g. ["A", "B"]) of series referenced by this formula that should be hidden from the chart while still being used in the formula computation'
     ),
 });
 
@@ -153,7 +293,7 @@ export const zChartBreakdown = z.object({
 export const zChartSeries = z
   .array(zChartEventItem)
   .describe(
-    'Array of series (events or formulas) to be tracked and displayed in the chart',
+    'Array of series (events or formulas) to be tracked and displayed in the chart'
   );
 
 export const zChartBreakdowns = z.array(zChartBreakdown);
@@ -238,10 +378,10 @@ export const zReportInput = z.object({
   interval: zTimeInterval
     .default('day')
     .describe(
-      'The time interval for data aggregation (e.g., day, week, month)',
+      'The time interval for data aggregation (e.g., day, week, month)'
     ),
   series: zChartSeries.describe(
-    'Array of series (events or formulas) to be tracked and displayed in the chart',
+    'Array of series (events or formulas) to be tracked and displayed in the chart'
   ),
   breakdowns: zChartBreakdowns
     .default([])
@@ -250,7 +390,7 @@ export const zReportInput = z.object({
     .array(zChartEventFilter)
     .optional()
     .describe(
-      'Filters applied to ALL event series in this report (combined with each series own filters using AND)',
+      'Filters applied to ALL event series in this report (combined with each series own filters using AND)'
     ),
   range: zRange
     .default('30d')
@@ -259,13 +399,13 @@ export const zReportInput = z.object({
     .string()
     .nullish()
     .describe(
-      'Custom start date for the data range (overrides range if provided)',
+      'Custom start date for the data range (overrides range if provided)'
     ),
   endDate: z
     .string()
     .nullish()
     .describe(
-      'Custom end date for the data range (overrides range if provided)',
+      'Custom end date for the data range (overrides range if provided)'
     ),
   previous: z
     .boolean()
@@ -278,7 +418,7 @@ export const zReportInput = z.object({
   metric: zMetric
     .default('sum')
     .describe(
-      'The aggregation method for the metric (e.g., sum, count, average)',
+      'The aggregation method for the metric (e.g., sum, count, average)'
     ),
   limit: z
     .number()
@@ -304,7 +444,7 @@ export const zReportInput = z.object({
     .string()
     .optional()
     .describe(
-      "Optional unit of measurement for the chart's Y-axis (e.g., $, %, users)",
+      "Optional unit of measurement for the chart's Y-axis (e.g., $, %, users)"
     ),
 });
 
@@ -390,7 +530,7 @@ export const zOnboardingProject = z
     timezone: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (!data.organization && !data.organizationId) {
+    if (!(data.organization || data.organizationId)) {
       ctx.addIssue({
         code: 'custom',
         message: 'Organization is required',
@@ -425,7 +565,6 @@ export const zOnboardingProject = z
       }
     }
   });
-
 
 export * from './integrations';
 
@@ -608,7 +747,7 @@ export const zGroupId = z
   .min(1)
   .regex(
     /^[a-z0-9_-]+$/,
-    'ID must only contain lowercase letters, digits, hyphens, or underscores',
+    'ID must only contain lowercase letters, digits, hyphens, or underscores'
   );
 
 export const zCreateGroup = z.object({
@@ -659,7 +798,7 @@ export const zHttpUrl = z
         return false;
       }
     },
-    { message: 'Only http and https URLs are allowed' },
+    { message: 'Only http and https URLs are allowed' }
   );
 
 const createFileImportConfig = <T extends string>(provider: T) =>
@@ -729,9 +868,9 @@ export const zCreateImport = z.object({
 
 export type ICreateImport = z.infer<typeof zCreateImport>;
 
-export * from './types.insights';
-export * from './types.validation';
-export * from './track.validation';
-export * from './event-blocklist';
 export * from './chat';
 export * from './cohort.validation';
+export * from './event-blocklist';
+export * from './track.validation';
+export * from './types.insights';
+export * from './types.validation';

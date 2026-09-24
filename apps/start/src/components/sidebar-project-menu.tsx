@@ -3,12 +3,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   BellIcon,
-  WorkflowIcon,
   BookOpenIcon,
   Building2Icon,
   ChartLineIcon,
   ChevronDownIcon,
   CogIcon,
+  FlaskConicalIcon,
   GanttChartIcon,
   Globe2Icon,
   GridIcon,
@@ -24,6 +24,7 @@ import {
   UserCircleIcon,
   UsersIcon,
   WallpaperIcon,
+  WorkflowIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SidebarLink } from './sidebar-link';
@@ -70,6 +71,11 @@ export default function SidebarProjectMenu({
       <SidebarLink href={'/profiles'} icon={UserCircleIcon} label="Profiles" />
       <SidebarLink href={'/groups'} icon={Building2Icon} label="Groups" />
       <SidebarLink href={'/cohorts'} icon={TargetIcon} label="Cohorts" />
+      <SidebarLink
+        href={'/experiments'}
+        icon={FlaskConicalIcon}
+        label="Experiments"
+      />
       <div className="mt-4 mb-2 font-medium text-muted-foreground text-sm">
         Manage
       </div>
@@ -159,13 +165,13 @@ export function ActionCTAButton() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            type="button"
             className={cn(
               'group flex w-full items-center gap-2 rounded-md border border-border bg-def-200 px-3 py-2 text-left',
-              'text-[13px] font-medium text-foreground',
+              'font-medium text-[13px] text-foreground',
               'transition-colors hover:bg-def-300',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
             )}
+            type="button"
           >
             <PlusIcon className="size-5 shrink-0" />
             <div className="relative flex h-5 flex-1 items-center overflow-hidden">

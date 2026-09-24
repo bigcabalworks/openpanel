@@ -1,23 +1,36 @@
 /** biome-ignore-all lint/suspicious/useAwait: fastify need async or done callbacks */
+
+import { toFastifyHandler } from '@better-agent/adapters';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUI from '@fastify/swagger-ui';
 import {
+  decodeSessionToken,
   EMPTY_SESSION,
   type SessionValidationResult,
-  decodeSessionToken,
   validateSessionToken,
 } from '@openpanel/auth';
 import { generateId } from '@openpanel/common';
 import { getTrustedIpFromHeaders } from '@openpanel/common/server/get-client-ip';
-import { type IServiceClientWithProject, runWithAlsSession } from '@openpanel/db';
+import {
+  getConversationById,
+  getOrganizationByProjectIdCached,
+  getProjectAccess,
+  getSettingsForProject,
+  type IServiceClientWithProject,
+  runWithAlsSession,
+} from '@openpanel/db';
 import type { AppRouter } from '@openpanel/trpc';
 import { appRouter, createContext } from '@openpanel/trpc';
 import type { FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
-import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
+import type {
+  FastifyBaseLogger,
+  FastifyInstance,
+  FastifyRequest,
+} from 'fastify';
 import Fastify from 'fastify';
 import metricsPlugin from 'fastify-metrics';
 import {
@@ -26,6 +39,8 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-zod-openapi';
+import { chatApp } from './agents/app';
+import { chatRunContext } from './agents/run-context';
 import {
   healthcheck,
   liveness,
@@ -35,17 +50,8 @@ import { ipHook } from './hooks/ip.hook';
 import { requestIdHook } from './hooks/request-id.hook';
 import { requestLoggingHook } from './hooks/request-logging.hook';
 import { timestampHook } from './hooks/timestamp.hook';
-import { toFastifyHandler } from '@better-agent/adapters';
-import { chatApp } from './agents/app';
-import { chatRunContext } from './agents/run-context';
-import {
-  db,
-  getConversationById,
-  getOrganizationByProjectIdCached,
-  getProjectAccess,
-  getSettingsForProject,
-} from '@openpanel/db';
 import eventRouter from './routes/event.router';
+import experimentsRouter from './routes/experiments.router';
 import exportRouter from './routes/export.router';
 import gscCallbackRouter from './routes/gsc-callback.router';
 import importRouter from './routes/import.router';
@@ -83,7 +89,7 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(
-  options: BuildAppOptions = {},
+  options: BuildAppOptions = {}
 ): Promise<FastifyInstance> {
   const { testing = false } = options;
 
@@ -110,19 +116,30 @@ export async function buildApp(
     process.env.DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL,
     ...(process.env.API_CORS_ORIGINS?.split(',') ?? []),
   ].filter(Boolean) as string[];
-  const corsPaths = ['/trpc', '/live', '/webhook', '/oauth', '/misc', '/ai'];
+  const corsPaths = [
+    '/trpc',
+    '/live',
+    '/webhook',
+    '/oauth',
+    '/misc',
+    '/ai',
+    '/experiments',
+  ];
 
   fastify.register(cors, () => {
     return (
       req: FastifyRequest,
-      callback: (error: Error | null, options: FastifyCorsOptions) => void,
+      callback: (error: Error | null, options: FastifyCorsOptions) => void
     ) => {
       const isPrivatePath = corsPaths.some((p) => req.url.startsWith(p));
 
       if (isPrivatePath) {
         const origin = req.headers.origin;
         const isAllowed = origin && dashboardOrigins.includes(origin);
-        return callback(null, { origin: isAllowed ? origin : false, credentials: true });
+        return callback(null, {
+          origin: isAllowed ? origin : false,
+          credentials: true,
+        });
       }
 
       return callback(null, { origin: '*', maxAge: 86_400 * 7 });
@@ -151,7 +168,7 @@ export async function buildApp(
         try {
           const sessionId = decodeSessionToken(req.cookies?.session);
           const session = await runWithAlsSession(sessionId, () =>
-            validateSessionToken(req.cookies.session),
+            validateSessionToken(req.cookies.session)
           );
           req.session = session;
         } catch {
@@ -160,7 +177,7 @@ export async function buildApp(
       } else if (process.env.DEMO_USER_ID) {
         try {
           const session = await runWithAlsSession('1', () =>
-            validateSessionToken(null),
+            validateSessionToken(null)
           );
           req.session = session;
         } catch {
@@ -177,7 +194,10 @@ export async function buildApp(
         router: appRouter,
         createContext,
         onError(ctx) {
-          if (ctx.error.code === 'UNAUTHORIZED' && ctx.path === 'organization.list') {
+          if (
+            ctx.error.code === 'UNAUTHORIZED' &&
+            ctx.path === 'organization.list'
+          ) {
             return;
           }
 
@@ -186,7 +206,7 @@ export async function buildApp(
           // Cloudflare when an abuser needs blocking at the edge.
           const { ip, header } = getTrustedIpFromHeaders(
             ctx.req.headers,
-            ctx.req.socket?.remoteAddress,
+            ctx.req.socket?.remoteAddress
           );
           const payload = {
             err: ctx.error,
@@ -257,8 +277,7 @@ export async function buildApp(
         //   "claude-sonnet-4-5/run"                      → run
         //   "claude-sonnet-4-5/conversations/abc"        → load conversation
         //   "__titler/run"                               → title stream (no project context)
-        const wildcard =
-          (request.params as { '*'?: string })['*'] ?? '';
+        const wildcard = (request.params as { '*'?: string })['*'] ?? '';
         const segments = wildcard.split('/').filter(Boolean);
         const agentName = segments[0] ?? '';
         const route = segments[1] ?? '';
@@ -298,7 +317,7 @@ export async function buildApp(
         const projectId = body?.context?.projectId;
         const organizationIdFromBody = body?.context?.organizationId;
 
-        if (!projectId || !organizationIdFromBody) {
+        if (!(projectId && organizationIdFromBody)) {
           return reply.status(400).send({
             message: 'Missing projectId or organizationId in context',
           });
@@ -315,8 +334,7 @@ export async function buildApp(
           getSettingsForProject(projectId).catch(() => ({ timezone: 'UTC' })),
         ]);
         if (
-          !access ||
-          !organization ||
+          !(access && organization) ||
           organization.id !== organizationIdFromBody
         ) {
           return reply
@@ -337,7 +355,7 @@ export async function buildApp(
             organizationId: organization.id,
             timezone: settings.timezone || 'UTC',
           },
-          () => agentHandler(request, reply),
+          () => agentHandler(request, reply)
         );
       });
     }
@@ -358,7 +376,14 @@ export async function buildApp(
           { name: 'Import', description: 'Import historical data' },
           { name: 'Insights', description: 'Query analytics data' },
           { name: 'Manage', description: 'Manage projects and clients' },
-          { name: 'Event', description: 'Legacy event ingestion (deprecated, use /track)' },
+          {
+            name: 'Event',
+            description: 'Legacy event ingestion (deprecated, use /track)',
+          },
+          {
+            name: 'Experiments',
+            description: 'BCM experiment lifecycle and signed manifests',
+          },
         ],
       },
       ...fastifyZodOpenApiTransformers,
@@ -369,7 +394,9 @@ export async function buildApp(
         return fastifyZodOpenApiTransformers.transform(args);
       },
     });
-    await instance.register(fastifySwaggerUI, { routePrefix: '/documentation' });
+    await instance.register(fastifySwaggerUI, {
+      routePrefix: '/documentation',
+    });
 
     // Prometheus metrics: skip in tests (causes global state conflicts across test runs)
     if (!testing) {
@@ -379,6 +406,7 @@ export async function buildApp(
     instance.register(eventRouter, { prefix: '/event' });
     instance.register(profileRouter, { prefix: '/profile' });
     instance.register(exportRouter, { prefix: '/export' });
+    instance.register(experimentsRouter, { prefix: '/experiments' });
     instance.register(importRouter, { prefix: '/import' });
     instance.register(insightsRouter, { prefix: '/insights' });
     instance.register(trackRouter, { prefix: '/track' });
@@ -389,7 +417,10 @@ export async function buildApp(
     instance.get('/healthz/live', { schema: { hide: true } }, liveness);
     instance.get('/healthz/ready', { schema: { hide: true } }, readiness);
     instance.get('/', { schema: { hide: true } }, (_request, reply) =>
-      reply.send({ status: 'ok', message: 'Successfully running OpenPanel.dev API' }),
+      reply.send({
+        status: 'ok',
+        message: 'Successfully running OpenPanel.dev API',
+      })
     );
   });
 

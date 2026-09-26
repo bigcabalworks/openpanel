@@ -1,0 +1,58 @@
+name: Build and publish BCM OpenPanel images
+
+on:
+  workflow_dispatch:      # manual trigger - "build this now"
+  push:
+    branches: [main]      # runs automatically whenever fork's main
+                            # branch changes (i.e. after a merge in an
+                            # upstream sync, or a custom change of our own)
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/bigcabalworks/openpanel
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # lets this workflow push to GHCR using the
+                          # built-in GITHUB_TOKEN 
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: worker
+            dockerfile: apps/worker/Dockerfile
+          - name: dashboard
+            dockerfile: apps/start/Dockerfile   # matches upstream's own
+                                                  # naming convention
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64        # server is Graviton (t4g) - build
+                                          # for the right architecture, not
+                                          # the GitHub runner's amd64
+          push: true
+          build-args: |
+            DATABASE_URL=postgresql://p@p:5432/p
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:latest
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:${{ github.sha }}

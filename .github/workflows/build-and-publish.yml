@@ -6,6 +6,13 @@ on:
     branches: [main]      # runs automatically whenever fork's main
                             # branch changes (i.e. after a merge in an
                             # upstream sync, or a custom change of our own)
+    paths:
+      - 'apps/api/**'
+      - 'apps/worker/**'
+      - 'apps/start/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-and-publish.yml'
 
 env:
   REGISTRY: ghcr.io

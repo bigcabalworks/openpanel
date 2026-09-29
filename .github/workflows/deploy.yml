@@ -1,0 +1,81 @@
+name: Deploy OpenPanel to production
+
+on:
+  workflow_dispatch:            # manual "deploy now" button
+  workflow_run:                 # or automatically after a successful build
+    workflows: ["Build and publish BCM OpenPanel images"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write               # required for AWS OIDC
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  INSTANCE_ID: i-0710a45f6ff16a685
+
+jobs:
+  deploy:
+    # Skip if the build it followed failed
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    # The approval gate: configured required reviewers on this environment
+    # The job pauses here until someone approves.
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pull and restart ONLY the three BCM-built services
+        run: |
+          set -uo pipefail
+
+          # Scoped to the three images we build. A bare `docker compose
+          # pull` would also bump floating third-party tags (postgres:14,
+          # caddy:2) as a side effect of every deploy.
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "OpenPanel deploy from GitHub Actions" \
+            --parameters 'commands=[
+              "cd /opt/openpanel/self-hosting",
+              "docker compose pull op-api op-worker op-dashboard",
+              "docker compose up -d op-api op-worker op-dashboard",
+              "sleep 20",
+              "docker compose ps"
+            ]' \
+            --query "Command.CommandId" --output text)
+          echo "SSM command: $CMD_ID"
+
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query Status --output text)
+
+          echo "----- stdout -----"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "----- stderr -----"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+
+          echo "Final status: $STATUS"
+          [ "$STATUS" = "Success" ]
+ 
+  slack_notify_update:
+    if: ${{ github.ref_name == 'main' && success() }}
+    needs: [deploy]
+    uses: bigcabalworks/workflows/.github/workflows/notify-slack.yml@main
+    with:
+      environment: "BCM OpenPanel production"
+    secrets: inherit

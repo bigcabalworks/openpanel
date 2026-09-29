@@ -72,10 +72,10 @@ jobs:
           echo "Final status: $STATUS"
           [ "$STATUS" = "Success" ]
  
-  slack_notify_update:
-    if: success() 
-    needs: [deploy]
-    uses: bigcabalworks/workflows/.github/workflows/notify-slack.yml@main
-    with:
-      environment: "BCM OpenPanel production"
-    secrets: inherit
+  # slack_notify_update:
+  #   if: success() 
+  #   needs: [deploy]
+  #   uses: bigcabalworks/workflows/.github/workflows/notify-slack.yml@main
+  #   with:
+  #     environment: "BCM OpenPanel production"
+  #   secrets: inherit

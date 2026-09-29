@@ -352,6 +352,95 @@ model Salt {
   @@map("salts")
 }
 
+enum ExperimentStatus {
+  draft
+  running
+  paused
+  stopped
+  archived
+}
+
+model Experiment {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key             String           @unique
+  name            String
+  revision        Int              @default(1)
+  slot            String
+  owner           String
+  status          ExperimentStatus @default(draft)
+  sites           String[]
+  environments    String[]
+  startsAt        DateTime?
+  stopsAt         DateTime?
+  allocation      Float            @default(1)
+  variants        Json
+  targeting       Json             @default("[]")
+  patches         Json             @default("[]")
+  primaryEvent    String
+  secondaryEvents String[]         @default([])
+  guardrailEvents String[]         @default([])
+  exclusionGroup  String?
+  assignmentSalt  String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+  audit            ExperimentAudit[]
+
+  @@index([status])
+  @@index([slot, status])
+  @@map("experiments")
+}
+
+model ExperimentPlacement {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  site        String
+  environment String
+  slot        String
+  variants    String[]
+  metadata    Json     @default("{}")
+  syncedAt    DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@unique([site, environment, slot])
+  @@index([site, environment])
+  @@map("experiment_placements")
+}
+
+model ExperimentManifestRevision {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  site        String
+  environment String
+  revision    Int      @default(1)
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@unique([site, environment])
+  @@map("experiment_manifest_revisions")
+}
+
+model ExperimentAudit {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  experimentId String     @db.Uuid
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  action       String
+  actor        String
+  source       String
+  revision     Int
+  details      Json       @default("{}")
+  createdAt    DateTime   @default(now())
+
+  @@index([experimentId, createdAt])
+  @@map("experiment_audit")
+}
+
+model ExperimentLifecycleRequest {
+  requestId    String   @id
+  experimentId String   @db.Uuid
+  action       String
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("experiment_lifecycle_requests")
+}
+
 enum ClientType {
   read
   write

@@ -7,6 +7,7 @@ import { conversationRouter } from './routers/conversation';
 import { dashboardRouter } from './routers/dashboard';
 import { emailRouter } from './routers/email';
 import { eventRouter } from './routers/event';
+import { experimentRouter } from './routers/experiment';
 import { groupRouter } from './routers/group';
 import { gscRouter } from './routers/gsc';
 import { importRouter } from './routers/import';
@@ -41,6 +42,7 @@ export const appRouter = createTRPCRouter({
   project: projectRouter,
   client: clientRouter,
   event: eventRouter,
+  experiment: experimentRouter,
   profile: profileRouter,
   session: sessionRouter,
   share: shareRouter,

@@ -73,7 +73,7 @@ jobs:
           [ "$STATUS" = "Success" ]
  
   slack_notify_update:
-    if: ${{ github.ref_name == 'main' && success() }}
+    if: success() 
     needs: [deploy]
     uses: bigcabalworks/workflows/.github/workflows/notify-slack.yml@main
     with:
